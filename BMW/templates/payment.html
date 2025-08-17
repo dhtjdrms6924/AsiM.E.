@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>결제</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .payment-container {
+            background-color: #ffffff;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+        .price-display {
+            font-size: 2.25rem;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 1.5rem;
+        }
+        .points-info {
+            font-size: 1.125rem;
+            color: #22c55e;
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-label {
+            display: block;
+            text-align: left;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #374151;
+        }
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-size: 1rem;
+        }
+        .btn-confirm {
+            background-color: #28a745;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            border: none;
+            transition: background-color 0.3s ease;
+        }
+        .btn-confirm:hover {
+            background-color: #218838;
+        }
+        .flash-message-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: auto;
+            max-width: 80%;
+            text-align: center;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 500;
+            transition: opacity 0.5s ease-out;
+        }
+        .flash-message-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .flash-message-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <div class="payment-container">
+        <h2 class="text-3xl font-bold mb-6 text-gray-800">결제 정보</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-message-container flash-message-{{ messages[0][0] }}">
+            {{ messages[0][1] | safe }}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="price-display">총 금액: {{ price }} 원</div>
+        <p class="points-info">예상 적립 포인트: {{ points_earned }} 점</p>
+        <p class="text-gray-500 mb-4">현재 보유 포인트: {{ user_points }} 점</p>
+
+        <form action="{{ url_for('payment_confirm') }}" method="post">
+            <div class="form-group">
+                <label for="points_to_use" class="form-label">사용할 포인트</label>
+                <input type="number" id="points_to_use" name="points_to_use" class="form-input" value="0" min="0" max="{{ user_points }}" required>
+            </div>
+            
+            <button type="submit" class="btn-confirm">결제하기</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내 예약 내역</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+        }
+        .table-container {
+            overflow-x: auto;
+            margin-bottom: 2rem;
+            border-radius: 0.75rem;
+            border: 1px solid #e2e8f0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        th, td {
+            padding: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #4b5563;
+            text-transform: uppercase;
+            font-size: 0.875rem;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .btn-primary {
+            background-color: #2563eb;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+        .btn-danger {
+            background-color: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #4b5563;
+        }
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+        }
+        .btn-dark {
+            background-color: #1f2937;
+            color: white;
+        }
+        .btn-dark:hover {
+            background-color: #111827;
+        }
+        .flash-message {
+            background-color: #d1fae5;
+            color: #065f46;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold mb-4 text-center">내 예약 내역</h1>
+        <p class="text-center text-lg text-gray-600 mb-6">현재 보유 포인트: {{ current_points }}점</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-message">
+                    {% for message in messages %}
+                        {{ message|safe }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>주차장</th>
+                        <th>주차 공간</th>
+                        <th>시작 시간</th>
+                        <th>종료 시간</th>
+                        <th>지불 금액</th>
+                        <th>적립 포인트</th>
+                        <th>취소</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in reservations %}
+                    <tr>
+                        <td>{{ LOTS[r.lot_id].name if LOTS[r.lot_id] else r.lot_id }}</td>
+                        <td>{{ r.spot }}</td>
+                        <td>{{ r.start | datetimeformat }}</td>
+                        <td>{{ r.end | datetimeformat }}</td>
+                        <td>{{ r.actual_price }} 원</td>
+                        <td>{{ r.points_earned }} 점</td>
+                        <td>
+                            <a href="{{ url_for('cancel_reservation', lot_id=r.lot_id, res_id=r.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('정말로 예약을 취소하시겠습니까?');">취소</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-gray-500 py-4">예약 내역이 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="flex flex-wrap justify-center gap-4 mt-8">
+            <a href="/search" class="btn btn-secondary">주차장 검색으로 돌아가기</a>
+            <a href="/logout" class="btn btn-dark">로그아웃</a>
+        </div>
+    </div>
+</body>
+</html>

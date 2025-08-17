@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>주차장 예약 로그인</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background-color: #ffffff;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #2563ce;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
+        .form-button {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            color: #ffffff;
+            background-color: #2563ce;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .form-button:hover {
+            background-color: #1d4ed8;
+        }
+        .flash-message {
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            text-align: left;
+        }
+        .flash-success {
+            background-color: #f0fdf4;
+            color: #16a34a;
+        }
+        .flash-error {
+            background-color: #fef2f2;
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2 class="text-3xl font-bold mb-6 text-gray-800">주차장 예약 시스템 로그인</h2>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">
+                        {{ message | safe }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form action="/" method="post">
+            <div class="mb-4">
+                <input type="text" id="username" name="username" class="form-input" placeholder="이름을 입력하세요" required>
+            </div>
+            <div class="mb-6">
+                <input type="password" id="password" name="password" class="form-input" placeholder="비밀번호를 입력하세요" required>
+            </div>
+            <button type="submit" class="form-button">로그인</button>
+        </form>
+    </div>
+</body>
+</html>
