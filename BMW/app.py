@@ -16,28 +16,28 @@ LOTS = {
         "base_price_per_min": 50, # 분당 기본 가격
         "traffic_level": 3, # 현재 교통량 혼잡도 (시뮬레이션)
         "spots": [
-            {"id": 1, "coords": "37,62,106,128", "spot_density": 1}, 
-            {"id": 2, "coords": "109,62,176,128", "spot_density": 2},
-            {"id": 3, "coords": "180,62,246,128", "spot_density": 3},
-            {"id": 4, "coords": "37,132,106,198", "spot_density": 1},
-            {"id": 5, "coords": "109,132,176,198", "spot_density": 2},
-            {"id": 6, "coords": "180,132,246,198", "spot_density": 3},
-            {"id": 7, "coords": "37,202,106,268", "spot_density": 1},
-            {"id": 8, "coords": "109,202,176,268", "spot_density": 2},
-            {"id": 9, "coords": "180,202,246,268", "spot_density": 1},
-            {"id": 10, "coords": "37,272,106,338", "spot_density": 2},
-            {"id": 11, "coords": "260,50,310,120", "spot_density": 3},
-            {"id": 12, "coords": "260,125,310,195", "spot_density": 3},
-            {"id": 13, "coords": "260,200,310,270", "spot_density": 3},
-            {"id": 14, "coords": "260,275,310,345", "spot_density": 2},
-            {"id": 15, "coords": "260,350,310,420", "spot_density": 2},
-            {"id": 16, "coords": "260,425,310,495", "spot_density": 2},
-            {"id": 17, "coords": "450,40,520,150", "spot_density": 1},
-            {"id": 18, "coords": "450,160,520,270", "spot_density": 1},
-            {"id": 19, "coords": "450,280,520,390", "spot_density": 1},
-            {"id": 20, "coords": "530,40,600,150", "spot_density": 1},
-            {"id": 21, "coords": "530,160,600,270", "spot_density": 1},
-            {"id": 22, "coords": "600,155,670,265", "spot_density": 1, "is_disabled": True},
+            {"id": 1, "coords": "228,116,300,188", "spot_density": 1}, 
+            {"id": 2, "coords": "303,115,375,188", "spot_density": 2},
+            {"id": 3, "coords": "228,192,299,263", "spot_density": 3},
+            {"id": 4, "coords": "303,192,374,263", "spot_density": 1},
+            {"id": 5, "coords": "397,116,470,187", "spot_density": 2},
+            {"id": 6, "coords": "473,115,546,188", "spot_density": 3},
+            {"id": 7, "coords": "399,192,470,262", "spot_density": 1},
+            {"id": 8, "coords": "473,193,544,263", "spot_density": 2},
+            {"id": 9, "coords": "568,117,641,188", "spot_density": 1},
+            {"id": 10, "coords": "644,117,713,187", "spot_density": 2},
+            {"id": 11, "coords": "570,191,640,262", "spot_density": 3},
+            {"id": 12, "coords": "645,192,714,262", "spot_density": 3},
+            {"id": 13, "coords": "739,116,809,187", "spot_density": 3},
+            {"id": 14, "coords": "815,116,885,189", "spot_density": 2},
+            {"id": 15, "coords": "739,192,811,262", "spot_density": 2},
+            {"id": 16, "coords": "814,192,885,264", "spot_density": 2},
+            {"id": 17, "coords": "909,116,980,189", "spot_density": 1},
+            {"id": 18, "coords": "985,117,1054,189", "spot_density": 1},
+            {"id": 19, "coords": "910,193,981,264", "spot_density": 1},
+            {"id": 20, "coords": "984,192,1055,263", "spot_density": 1},
+            {"id": 21, "coords": "229,288,300,361", "spot_density": 1},
+            {"id": 22, "coords": "305,286,376,360", "spot_density": 1, "is_disabled": True},
         ],
         "map_coords": [300, 250]
     },
@@ -155,11 +155,9 @@ def calculate_eco_points(lot_id, spot_id, duration_min):
         spot_density = next((s['spot_density'] for s in lot_info['spots'] if s['id'] == spot_id), 2) # 1~3 (1: 널널함, 3: 빽빽함)
 
     # 기본 포인트 (시간당) - 교통량에 반비례
-    # 교통량 1: 100포인트/시간, 2: 80, 3: 60, 4: 40, 5: 20
-    base_points_per_hour = max(0, 120 - (traffic_level * 20)) # 1시간 기준
+    base_points_per_hour = max(0, 120 - (traffic_level * 20))
     
-    # 주차 공간 밀집도에 따른 추가 포인트 (널널할수록 추가)
-    # 밀집도 1: +20포인트/시간, 2: +0, 3: -10
+    # 주차 공간 밀집도에 따른 추가/차감 포인트 (널널할수록 추가)
     density_points_per_hour = 0
     if spot_density == 1:
         density_points_per_hour = 20
@@ -170,8 +168,7 @@ def calculate_eco_points(lot_id, spot_id, duration_min):
     
     # 분 단위로 변환 및 계산
     total_points = (total_points_per_hour / 60) * duration_min
-    return max(0, round(total_points)) # 음수 방지 및 반올림
-
+    return max(0, round(total_points))
 
 @app.route("/calculate_estimates/<lot_id>/<int:spot_id>/<int:duration_min>")
 def calculate_estimates(lot_id, spot_id, duration_min):
@@ -328,28 +325,24 @@ def lot(lot_id):
         
         # Determine the display status for the spot area button
         # Red if currently occupied OR the next 30-min slot is occupied
-        display_status_class = 'spot-available-now' # Default to green
+        display_status_class = 'spot-available'
         if is_currently_occupied or is_next_slot_occupied:
-            display_status_class = 'spot-unavailable' # Red if currently occupied OR next slot is occupied
+            display_status_class = 'spot-occupied'
         
-        # --- DEBUG PRINT ---
-        print(f"Spot {spot['id']}: current_dt={current_dt.strftime('%H:%M')}, "
-              f"next_30min_interval_start_dt={next_30min_interval_start_dt.strftime('%H:%M')}, "
-              f"is_currently_occupied={is_currently_occupied}, "
-              f"is_next_slot_occupied={is_next_slot_occupied}, "
-              f"final_display_class={display_status_class}")
-        # --- END DEBUG PRINT ---
+        # 예상 적립 포인트 계산하여 추가
+        estimated_points_for_1hr = calculate_eco_points(lot_id, spot['id'], 60)
 
         spots_data.append({
             "id": spot['id'],
             "coords": spot['coords'],
-            "status": "occupied" if is_currently_occupied else "available", # Keep original status for timeline logic
-            "display_class": display_status_class, # New field for initial color
+            "status": "occupied" if is_currently_occupied else "available",
+            "display_class": 'spot-area ' + display_status_class,
             "reserved_info": reserved_info,
-            "spot_density": spot['spot_density']
+            "spot_density": spot['spot_density'],
+            "estimated_points": estimated_points_for_1hr
         })
 
-    return render_template("lot.html", lot=lot_info, lot_id=lot_id, spots_data=spots_data, now=now_timestamp, current_dt=current_dt) # current_dt 전달
+    return render_template("lot.html", lot=lot_info, lot_id=lot_id, spots_data=spots_data, current_dt=current_dt)
 
 
 @app.route("/reservation_status/<lot_id>/<int:spot_id>")
@@ -415,7 +408,7 @@ def reserve(lot_id, spot_id):
 
     # 사용자 정보가 users 딕셔너리에 없으면 초기화
     if username not in users:
-        users[username] = {"points": 0}
+        users[username] = {"points": 0, "password": ""}
 
     # 기존 예약 페이지는 사용하지 않고, lot.html에서 바로 예약 정보를 받음
     date_str = request.form.get("date")
@@ -528,7 +521,7 @@ def my_reservations():
 
     # 사용자 정보가 users 딕셔너리에 없으면 초기화
     if username not in users:
-        users[username] = {"points": 0}
+        users[username] = {"points": 0, "password": ""}
 
     mylist = []
     for lot_id, revs in reservations.items():
