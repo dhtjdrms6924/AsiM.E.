@@ -16,16 +16,30 @@ LOTS = {
         "base_price_per_min": 50, # 분당 기본 가격
         "traffic_level": 3, # 현재 교통량 혼잡도 (시뮬레이션)
         "spots": [
-            {"id": 1, "coords": "228,116,300,188", "spot_density": 1}, # 널널한 자리
-            {"id": 2, "coords": "110,50,160,100", "spot_density": 2},
-            {"id": 3, "coords": "170,50,220,100", "spot_density": 3}, # 빽빽한 자리
-            {"id": 4, "coords": "50,110,100,160", "spot_density": 1},
-            {"id": 5, "coords": "110,110,160,160", "spot_density": 2},
-            {"id": 6, "coords": "170,110,220,160", "spot_density": 3},
-            {"id": 7, "coords": "50,170,100,220", "spot_density": 1},
-            {"id": 8, "coords": "110,170,160,220", "spot_density": 2},
+            {"id": 1, "coords": "37,62,106,128", "spot_density": 1}, 
+            {"id": 2, "coords": "109,62,176,128", "spot_density": 2},
+            {"id": 3, "coords": "180,62,246,128", "spot_density": 3},
+            {"id": 4, "coords": "37,132,106,198", "spot_density": 1},
+            {"id": 5, "coords": "109,132,176,198", "spot_density": 2},
+            {"id": 6, "coords": "180,132,246,198", "spot_density": 3},
+            {"id": 7, "coords": "37,202,106,268", "spot_density": 1},
+            {"id": 8, "coords": "109,202,176,268", "spot_density": 2},
+            {"id": 9, "coords": "180,202,246,268", "spot_density": 1},
+            {"id": 10, "coords": "37,272,106,338", "spot_density": 2},
+            {"id": 11, "coords": "260,50,310,120", "spot_density": 3},
+            {"id": 12, "coords": "260,125,310,195", "spot_density": 3},
+            {"id": 13, "coords": "260,200,310,270", "spot_density": 3},
+            {"id": 14, "coords": "260,275,310,345", "spot_density": 2},
+            {"id": 15, "coords": "260,350,310,420", "spot_density": 2},
+            {"id": 16, "coords": "260,425,310,495", "spot_density": 2},
+            {"id": 17, "coords": "450,40,520,150", "spot_density": 1},
+            {"id": 18, "coords": "450,160,520,270", "spot_density": 1},
+            {"id": 19, "coords": "450,280,520,390", "spot_density": 1},
+            {"id": 20, "coords": "530,40,600,150", "spot_density": 1},
+            {"id": 21, "coords": "530,160,600,270", "spot_density": 1},
+            {"id": 22, "coords": "600,155,670,265", "spot_density": 1, "is_disabled": True},
         ],
-        "map_coords": [300, 250] # 강남 지도 (map_gangnam.jpg) 상의 대략적인 위치
+        "map_coords": [300, 250]
     },
     "hongdae": {
         "name": "홍대입구역 2번 출구 주차장",
