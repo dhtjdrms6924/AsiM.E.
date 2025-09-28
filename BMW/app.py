@@ -2,6 +2,19 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import secrets
+# 맨 위 import 근처에 추가
+from flask_cors import CORS
+
+# Flask 생성 직후에 추가
+# ⚠️ 개발용: 크로스도메인 허용(+쿠키 전송). 운영 시 origin을 Framer 도메인으로 한정하세요.
+CORS(app, resources={r"/*": {"origins": ["*"]}}, supports_credentials=True)
+
+# 쿠키가 크로스 사이트에서 동작하도록 설정(HTTPS 권장)
+app.config.update(
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SECURE=True,  # 로컬 HTTP에서 테스트 시 False로 내려도 됨
+)
+
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key"  # 데모 용
@@ -396,3 +409,4 @@ def api_cancel():
 if __name__ == "__main__":
     # 개발용 실행
     app.run(debug=True, host="0.0.0.0", port=5001)
+
