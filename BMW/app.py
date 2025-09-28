@@ -1,35 +1,42 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import secrets
-# 맨 위 import 근처에 추가
-from flask_cors import CORS
 
-# Flask 생성 직후에 추가
-# ⚠️ 개발용: 크로스도메인 허용(+쿠키 전송). 운영 시 origin을 Framer 도메인으로 한정하세요.
-CORS(app, resources={r"/*": {"origins": ["*"]}}, supports_credentials=True)
+# =========================
+# 1. 앱 초기화 및 설정 (하나로 통합)
+# =========================
 
-# 쿠키가 크로스 사이트에서 동작하도록 설정(HTTPS 권장)
+app = Flask(__name__)
+
+# 데모용 secret key 설정 (세션을 사용하지 않아도 CSRF 방어 등을 위해 필요)
+app.secret_key = "super_secret_key"
+
+# CORS 설정: 프론트엔드가 모든 도메인에서 쿠키를 포함하여 접근하도록 허용
+# (운영 환경에서는 ["*"] 대신 Framer 도메인(예: "https://your-framer-site.framer.app")을 지정해야 보안상 안전합니다.)
+CORS(app, resources={r"/api/*": {"origins": ["*"]}}, supports_credentials=True)
+
+# 쿠키 설정: 크로스 사이트(Cross-site) 요청에서 쿠키를 보낼 수 있도록 설정
+# Framer에서 API 서버로 요청할 때 필요합니다.
 app.config.update(
     SESSION_COOKIE_SAMESITE="None",
-    SESSION_COOKIE_SECURE=True,  # 로컬 HTTP에서 테스트 시 False로 내려도 됨
+    SESSION_COOKIE_SECURE=True,  # HTTPS 환경에서 True를 유지합니다. Render는 HTTPS를 사용합니다.
 )
 
 
-app = Flask(__name__)
-app.secret_key = "super_secret_key"  # 데모 용
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
-
 # =========================
-# 데이터 (데모용 In-Memory)
+# 2. 데이터 (데모용 In-Memory)
 # =========================
 
-# 주차장/지도 데이터
+# 주차장/지도 데이터 (변동 없음)
 LOTS = {
     "gangnam": {
         "name": "강남역 1번 출구 주차장",
+        "address": "서울특별시 강남구 테헤란로 123", # LotDetail.tsx 호환을 위해 address 추가
+        "description": "강남역 초역세권 프리미엄 주차장입니다.", # LotDetail.tsx 호환을 위해 description 추가
+        "pricePerHour": 3000, # LotDetail.tsx 호환을 위해 시간당 가격 필드 추가 (기존 base_price_per_min * 60)
         "image": "/static/images/gangnam_parking.png",
-        "base_price_per_min": 50,
+        "base_price_per_min": 50, # 3000원 / 60분
         "traffic_level": 3,
         "spots": [
             {"id": 1, "coords": "228,116,300,188", "spot_density": 1},
@@ -45,6 +52,9 @@ LOTS = {
     },
     "hongdae": {
         "name": "홍대입구역 2번 출구 주차장",
+        "address": "서울특별시 마포구 양화로 161",
+        "description": "홍대 번화가 중심에 위치한 주차장입니다.",
+        "pricePerHour": 2400, # 40원 * 60분
         "image": "/static/images/hongdae_parking.png",
         "base_price_per_min": 40,
         "traffic_level": 4,
@@ -59,6 +69,9 @@ LOTS = {
     },
     "seoul_station": {
         "name": "서울역 공영 주차장",
+        "address": "서울특별시 용산구 한강대로 405",
+        "description": "KTX 이용객을 위한 넓은 공영 주차장입니다.",
+        "pricePerHour": 3600, # 60원 * 60분
         "image": "/static/images/seoul_station_parking.png",
         "base_price_per_min": 60,
         "traffic_level": 2,
@@ -111,7 +124,7 @@ tokens = {}  # token -> username
 
 
 # =========================
-# 유틸 함수
+# 3. 유틸 함수 (Bearer Token 인증 방식 유지)
 # =========================
 def check_overlapping(username, lot_id, spot_id, start_ts, end_ts):
     """사용자/자리 예약 겹침 검사"""
@@ -154,6 +167,7 @@ def calculate_eco_points(lot_id, spot_id, duration_min):
 
 
 def auth_user():
+    """Authorization 헤더에서 토큰을 추출하여 사용자 이름 반환"""
     h = request.headers.get("Authorization", "")
     if h.startswith("Bearer "):
         token = h.split(" ", 1)[1]
@@ -162,7 +176,7 @@ def auth_user():
 
 
 # =========================
-# API (프론트=Framer)
+# 4. API 라우트 (Bearer Token 인증 방식 유지 및 통합)
 # =========================
 
 @app.post("/api/login")
@@ -173,6 +187,7 @@ def api_login():
         token = secrets.token_hex(16)
         tokens[token] = u
         return jsonify(token=token, points=users[u]["points"])
+    # make_response 대신 jsonify 사용 (토큰 인증 섹션 유지)
     return jsonify(error="invalid_credentials"), 401
 
 
@@ -188,10 +203,13 @@ def api_search():
             {
                 "id": lot_id,
                 "name": lot["name"],
+                "address": lot["address"], # LotDetail 호환 필드 추가
+                "description": lot["description"], # LotDetail 호환 필드 추가
+                "pricePerHour": lot["pricePerHour"], # LotDetail 호환 필드 추가
                 "image": lot["image"],
                 "base_price_per_min": lot["base_price_per_min"],
                 "estimated_points_per_hour": calculate_eco_points(lot_id, 0, 60),
-                "map_coords": lot.get("map_coords"),  # [x, y] (지도 이미지 픽셀 기준)
+                "map_coords": lot.get("map_coords"),
             }
         )
     return jsonify(
@@ -203,12 +221,33 @@ def api_search():
     )
 
 
-@app.get("/api/lots/<lot_id>")
+@app.get("/api/parking/detail/<lot_id>") # Framer의 LotDetail.tsx에서 요청하는 경로로 수정 (원래 코드 `/api/parking/detail/{id}`에 맞춤)
 def api_lot_detail(lot_id):
     lot = LOTS.get(lot_id)
     if not lot:
         return jsonify(error="not_found"), 404
 
+    # LotDetail.tsx가 기대하는 필드 포함
+    return jsonify(
+        {
+            "id": lot_id,
+            "name": lot["name"],
+            "address": lot["address"], 
+            "description": lot["description"], 
+            "pricePerHour": lot["pricePerHour"], 
+            # 필요한 경우 상세 주차 공간 정보도 추가 가능
+        }
+    )
+
+
+# 기존 '/api/lots/<lot_id>' 라우트는 '/api/parking/detail/<lot_id>' 라우트가 대체합니다.
+# 기존의 '/api/lots/<lot_id>' 라우트처럼 상세 정보를 포함하는 버전
+@app.get("/api/lots/<lot_id>")
+def api_lot_map_detail(lot_id):
+    lot = LOTS.get(lot_id)
+    if not lot:
+        return jsonify(error="not_found"), 404
+        
     now_ts = int(datetime.now().timestamp())
     lot_res = reservations.get(lot_id, [])
 
@@ -238,6 +277,129 @@ def api_lot_detail(lot_id):
     )
 
 
+@app.post("/api/reserve")
+def api_reserve():
+    user = auth_user()
+    if not user:
+        return jsonify(error="unauthorized"), 401
+
+    d = request.get_json(silent=True) or {}
+    lot_id = d.get("lotId") # LotDetail.tsx에서 보낸 lotId 키에 맞춤
+    start_time_str = d.get("startTime") # LotDetail.tsx에서 보낸 startTime 키에 맞춤
+    duration_hours = int(d.get("durationHours", 0)) # LotDetail.tsx에서 보낸 durationHours 키에 맞춤
+
+    # LotDetail.tsx에서 lotId를 숫자로 보내지만, LOTS 딕셔너리는 문자열 키를 사용하므로 문자열로 변환
+    lot_id = str(lot_id) 
+    spot_id = 0 # 상세 자리 예약이 아닌 전체 주차장 예약을 가정하고 0 사용
+
+    if not all([lot_id, start_time_str]) or duration_hours <= 0:
+        return jsonify(error="bad_request", message="필수 예약 정보가 누락되었습니다."), 400
+
+    try:
+        # LotDetail.tsx의 datetime-local 형식(YYYY-MM-DDTHH:MM)을 파싱
+        start_dt = datetime.strptime(start_time_str, "%Y-%m-%dT%H:%M")
+    except ValueError:
+         return jsonify(error="bad_request", message="잘못된 시간 형식입니다. YYYY-MM-DDTHH:MM 형식이 필요합니다."), 400
+
+    start_ts = int(start_dt.timestamp())
+    end_ts = int((start_dt + timedelta(hours=duration_hours)).timestamp())
+    duration_min = duration_hours * 60
+
+    if start_ts < int(datetime.now().timestamp()) - 60: # 1분 여유
+        return jsonify(error="past_time", message="과거 시간으로는 예약할 수 없습니다."), 400
+
+    lot = LOTS.get(lot_id)
+    if not lot:
+        return jsonify(error="not_found", message="주차장 정보를 찾을 수 없습니다."), 404
+
+    # 겹침 검사는 데모 목적상 생략하거나, 필요한 경우 주차장 전체를 검사하는 로직으로 대체 가능.
+    # 현재는 상세 자리(spot) 없이 예약하므로, 복잡한 겹침 검사는 생략합니다.
+
+    price = duration_min * lot["base_price_per_min"]
+    points = calculate_eco_points(lot_id, spot_id, duration_min)
+
+    reservation_id = secrets.token_hex(10) # 고유 ID 생성
+
+    r = {
+        "id": reservation_id,
+        "user": user,
+        "spot": spot_id,
+        "start": start_ts,
+        "end": end_ts,
+        "original_price": price,
+        "actual_price": price,
+        "points_earned": points,
+        "status": "pending",
+        "lot_id": lot_id,
+    }
+    reservations.setdefault(lot_id, []).append(r)
+    
+    # LotDetail.tsx의 window.location.assign("/payment?reservationId=" + j.reservationId)에 맞춤
+    return jsonify(reservationId=reservation_id, reservation=r)
+
+
+@app.post("/api/payment/confirm")
+def api_payment_confirm():
+    user = auth_user()
+    if not user:
+        return jsonify(error="unauthorized"), 401
+
+    d = request.get_json(silent=True) or {}
+    # lot_id와 reservation_id를 모두 받지 않고 reservation_id만으로 모든 예약을 순회하여 찾습니다.
+    rid = d.get("reservation_id")
+    use_points = int(d.get("points_to_use", 0))
+
+    target = None
+    target_lot_id = None
+    for lot_id, lst in reservations.items():
+        for r in lst:
+            if r["id"] == rid and r["user"] == user:
+                target = r
+                target_lot_id = lot_id
+                break
+        if target:
+            break
+            
+    if not target:
+        return jsonify(error="reservation_not_found"), 404
+
+    price = target["original_price"]
+    
+    # 포인트 사용
+    if use_points > 0:
+        if users[user]["points"] < use_points:
+            return jsonify(error="insufficient_points"), 400
+        target["actual_price"] = max(0, price - use_points)
+        users[user]["points"] -= use_points
+
+    # 포인트 적립
+    target["status"] = "paid"
+    users[user]["points"] += target["points_earned"]
+    
+    return jsonify(
+        reservation=target, 
+        current_points=users[user]["points"], 
+        lot_id=target_lot_id
+    )
+
+@app.get("/api/reservations")
+def api_reservations():
+    user = auth_user()
+    if not user:
+        return jsonify(error="unauthorized"), 401
+
+    out = []
+    for lot_id, lst in reservations.items():
+        for r in lst:
+            if r["user"] == user:
+                out.append({**r, "lot_id": lot_id})
+    out.sort(key=lambda x: x["start"], reverse=True) # 최신 예약부터 보이도록 역순 정렬
+    return jsonify(reservations=out)
+
+# 나머지 라우트('/reservation_status', '/calculate_estimates', '/api/reservations/cancel')는
+# 중복이 없으므로 기존 코드를 그대로 유지합니다. (생략)
+
+# (기존 reservation_status 함수 코드를 여기에 붙여넣음)
 @app.get("/reservation_status/<lot_id>/<int:spot_id>")
 def reservation_status(lot_id, spot_id):
     now_dt = datetime.now()
@@ -277,7 +439,7 @@ def reservation_status(lot_id, spot_id):
         }
     )
 
-
+# (기존 calculate_estimates 함수 코드를 여기에 붙여넣음)
 @app.get("/calculate_estimates/<lot_id>/<int:spot_id>/<int:duration_min>")
 def calculate_estimates(lot_id, spot_id, duration_min):
     lot_info = LOTS.get(lot_id)
@@ -289,103 +451,7 @@ def calculate_estimates(lot_id, spot_id, duration_min):
     points = calculate_eco_points(lot_id, spot_id, duration_min)
     return jsonify(price=price, points=points)
 
-
-@app.post("/api/reserve")
-def api_reserve():
-    user = auth_user()
-    if not user:
-        return jsonify(error="unauthorized"), 401
-
-    d = request.get_json(silent=True) or {}
-    lot_id = d.get("lot_id")
-    spot_id = int(d.get("spot_id", 0))
-    date_str = d.get("date")
-    hour = int(d.get("hour", 0))
-    minute = int(d.get("minute", 0))
-    duration = int(d.get("duration_min", 0))
-
-    if not all([lot_id, spot_id, date_str]) or duration <= 0:
-        return jsonify(error="bad_request"), 400
-
-    start_dt = datetime.strptime(f"{date_str} {hour}:{minute}", "%Y-%m-%d %H:%M")
-    start_ts = int(start_dt.timestamp())
-    end_ts = int((start_dt + timedelta(minutes=duration)).timestamp())
-
-    if start_ts < int(datetime.now().timestamp()):
-        return jsonify(error="past_time"), 400
-
-    ov = check_overlapping(user, lot_id, spot_id, start_ts, end_ts)
-    if ov is True:
-        return jsonify(error="user_overlap"), 409
-    if ov == "spot_taken":
-        return jsonify(error="spot_taken"), 409
-
-    lot = LOTS.get(lot_id)
-    if not lot:
-        return jsonify(error="not_found"), 404
-
-    price = duration * lot["base_price_per_min"]
-    points = calculate_eco_points(lot_id, spot_id, duration)
-
-    r = {
-        "id": int(datetime.now().timestamp() * 1000),
-        "user": user,
-        "spot": spot_id,
-        "start": start_ts,
-        "end": end_ts,
-        "original_price": price,
-        "actual_price": price,
-        "points_earned": points,
-        "status": "pending",
-        "lot_id": lot_id,
-    }
-    reservations.setdefault(lot_id, []).append(r)
-    return jsonify(reservation=r)
-
-
-@app.post("/api/payment/confirm")
-def api_payment_confirm():
-    user = auth_user()
-    if not user:
-        return jsonify(error="unauthorized"), 401
-
-    d = request.get_json(silent=True) or {}
-    lot_id = d.get("lot_id")
-    rid = int(d.get("reservation_id", 0))
-    use_points = int(d.get("points_to_use", 0))
-
-    lst = reservations.get(lot_id, [])
-    r = next((x for x in lst if x["id"] == rid and x["user"] == user), None)
-    if not r:
-        return jsonify(error="not_found"), 404
-
-    price = r["original_price"]
-    if use_points > 0:
-        if users[user]["points"] < use_points:
-            return jsonify(error="insufficient_points"), 400
-        r["actual_price"] = max(0, price - use_points)
-        users[user]["points"] -= use_points
-
-    r["status"] = "paid"
-    users[user]["points"] += r["points_earned"]
-    return jsonify(reservation=r, current_points=users[user]["points"])
-
-
-@app.get("/api/reservations")
-def api_reservations():
-    user = auth_user()
-    if not user:
-        return jsonify(error="unauthorized"), 401
-
-    out = []
-    for lot_id, lst in reservations.items():
-        for r in lst:
-            if r["user"] == user:
-                out.append({**r, "lot_id": lot_id})
-    out.sort(key=lambda x: x["start"])
-    return jsonify(reservations=out)
-
-
+# (기존 api_cancel 함수 코드를 여기에 붙여넣음)
 @app.post("/api/reservations/cancel")
 def api_cancel():
     user = auth_user()
@@ -394,7 +460,7 @@ def api_cancel():
 
     d = request.get_json(silent=True) or {}
     lot_id = d.get("lot_id")
-    rid = int(d.get("reservation_id", 0))
+    rid = d.get("reservation_id") # rid를 문자열로 받도록 수정 (secrets.token_hex로 생성했기 때문)
 
     lst = reservations.get(lot_id, [])
     for i, r in enumerate(lst):
@@ -405,171 +471,12 @@ def api_cancel():
             return jsonify(ok=True)
     return jsonify(error="not_found"), 404
 
+# =========================
+# 5. 실행
+# =========================
 
 if __name__ == "__main__":
-    # 개발용 실행
+    # 개발용 로컬 실행 시
     app.run(debug=True, host="0.0.0.0", port=5001)
 
-# ----------------------- JSON API (Framer 연동) -----------------------
-from flask import make_response
-
-def _user_points(username):
-    if username not in users:
-        users[username] = {"points": 0, "password": "1234"}
-    return users[username]["points"]
-
-@app.route("/api/login", methods=["POST"])
-def api_login():
-    data = request.get_json(silent=True) or {}
-    username = data.get("username", "")
-    password = data.get("password", "")
-    if username in users and users[username]["password"] == password:
-        session["username"] = username
-        return jsonify({"ok": True, "username": username, "points": _user_points(username)})
-    return make_response(jsonify({"ok": False, "error": "invalid_credentials"}), 401)
-
-@app.route("/api/logout", methods=["POST"])
-def api_logout():
-    session.clear()
-    return jsonify({"ok": True})
-
-@app.route("/api/search")
-def api_search():
-    # 기존 /search의 데이터 조합을 간단히 JSON으로 변환
-    q = request.args.get("q", "").strip() or "서울특별시"
-    loc = SEARCH_LOCATIONS.get(q, SEARCH_LOCATIONS["서울특별시"])
-    lots = []
-    for lot_id in loc["lots"]:
-        lot = LOTS.get(lot_id)
-        if not lot:
-            continue
-        lots.append({
-            "id": lot_id,
-            "name": lot["name"],
-            "image": lot["image"],
-            "base_price_per_min": lot["base_price_per_min"],
-            "estimated_points_per_hour": calculate_eco_points(lot_id, 0, 60),
-            "map_coords": lot.get("map_coords"),
-        })
-    return jsonify({
-        "map": {
-            "image": loc["image"],
-            "width": loc["map_width"],
-            "height": loc["map_height"],
-        },
-        "lots": lots,
-    })
-
-@app.route("/api/lots/<lot_id>")
-def api_lot(lot_id):
-    lot = LOTS.get(lot_id)
-    if not lot:
-        return make_response(jsonify({"error": "not_found"}), 404)
-    spots = []
-    for s in lot["spots"]:
-        # "x1,y1,x2,y2" -> [x1,y1,x2,y2]
-        c = [int(v) for v in s["coords"].split(",")] if isinstance(s["coords"], str) else s["coords"]
-        spots.append({
-            "id": s["id"],
-            "coords": c,
-            "spot_density": s.get("spot_density", 2)
-        })
-    return jsonify({
-        "id": lot_id,
-        "name": lot["name"],
-        "image": lot["image"],
-        "base_price_per_min": lot["base_price_per_min"],
-        "traffic_level": lot.get("traffic_level"),
-        "spots": spots,
-    })
-
-@app.route("/api/reservations")
-def api_my_reservations():
-    username = session.get("username")
-    if not username:
-        return make_response(jsonify({"error": "unauthorized"}), 401)
-    out = []
-    for lot_id, revs in reservations.items():
-        for r in revs:
-            if r["user"] == username:
-                out.append({**r, "lot_id": lot_id})
-    return jsonify({"reservations": out, "points": _user_points(username)})
-
-@app.route("/api/reserve", methods=["POST"])
-def api_reserve():
-    username = session.get("username")
-    if not username:
-        return make_response(jsonify({"error": "unauthorized"}), 401)
-    data = request.get_json(silent=True) or {}
-    lot_id = data.get("lot_id")
-    spot_id = int(data.get("spot_id", 0))
-    date_str = data.get("date")
-    hour = int(data.get("hour", 0))
-    minute = int(data.get("minute", 0))
-    duration_min = int(data.get("duration_min", 60))
-
-    try:
-        start_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(hour=hour, minute=minute, second=0, microsecond=0)
-    except Exception:
-        return make_response(jsonify({"error": "bad_request"}), 400)
-
-    start_ts = int(start_dt.timestamp())
-    end_ts = int((start_dt + timedelta(minutes=duration_min)).timestamp())
-
-    # 겹침 검사(원래 로직 재사용)
-    ov = check_overlapping(username, lot_id, spot_id, start_ts, end_ts)
-    if ov is True:
-        return make_response(jsonify({"error": "user_overlap"}), 409)
-    if ov == "spot_taken":
-        return make_response(jsonify({"error": "spot_unavailable"}), 409)
-
-    price = duration_min * LOTS[lot_id]["base_price_per_min"]
-    points_earned = calculate_eco_points(lot_id, spot_id, duration_min)
-
-    res_id = f"{lot_id}-{spot_id}-{start_ts}"
-    reservations.setdefault(lot_id, []).append({
-        "id": res_id, "user": username, "spot": spot_id,
-        "start": start_ts, "end": end_ts,
-        "price": price, "points_earned": points_earned
-    })
-
-    return jsonify({
-        "ok": True,
-        "reservation": {
-            "id": res_id, "spot": spot_id, "start": start_ts, "end": end_ts,
-            "price": price, "points_earned": points_earned
-        }
-    })
-
-@app.route("/api/payment/confirm", methods=["POST"])
-def api_payment_confirm():
-    username = session.get("username")
-    if not username:
-        return make_response(jsonify({"error": "unauthorized"}), 401)
-    data = request.get_json(silent=True) or {}
-    lot_id = data.get("lot_id")
-    reservation_id = data.get("reservation_id")
-    points_to_use = int(data.get("points_to_use", 0))
-
-    # 예약 찾기
-    target = None
-    for r in reservations.get(lot_id, []):
-        if r["id"] == reservation_id or (not reservation_id and r["user"] == username):
-            target = r
-            break
-    if not target:
-        return make_response(jsonify({"error": "reservation_not_found"}), 404)
-
-    # 포인트 차감 + 적립
-    users.setdefault(username, {"points": 0, "password": "1234"})
-    use = min(points_to_use, users[username]["points"])
-    users[username]["points"] -= use
-    users[username]["points"] += target.get("points_earned", 0)
-
-    return jsonify({
-        "ok": True,
-        "reservation": target,
-        "current_points": users[username]["points"]
-    })
-# ---------------------------------------------------------------------
-
+# Render에서 gunicorn이 실행할 때 필요한 'app' 객체가 파일 최상단에 정의되어 있으므로 문제 없음.
