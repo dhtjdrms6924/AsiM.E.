@@ -410,3 +410,166 @@ if __name__ == "__main__":
     # 개발용 실행
     app.run(debug=True, host="0.0.0.0", port=5001)
 
+# ----------------------- JSON API (Framer 연동) -----------------------
+from flask import make_response
+
+def _user_points(username):
+    if username not in users:
+        users[username] = {"points": 0, "password": "1234"}
+    return users[username]["points"]
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.get_json(silent=True) or {}
+    username = data.get("username", "")
+    password = data.get("password", "")
+    if username in users and users[username]["password"] == password:
+        session["username"] = username
+        return jsonify({"ok": True, "username": username, "points": _user_points(username)})
+    return make_response(jsonify({"ok": False, "error": "invalid_credentials"}), 401)
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+@app.route("/api/search")
+def api_search():
+    # 기존 /search의 데이터 조합을 간단히 JSON으로 변환
+    q = request.args.get("q", "").strip() or "서울특별시"
+    loc = SEARCH_LOCATIONS.get(q, SEARCH_LOCATIONS["서울특별시"])
+    lots = []
+    for lot_id in loc["lots"]:
+        lot = LOTS.get(lot_id)
+        if not lot:
+            continue
+        lots.append({
+            "id": lot_id,
+            "name": lot["name"],
+            "image": lot["image"],
+            "base_price_per_min": lot["base_price_per_min"],
+            "estimated_points_per_hour": calculate_eco_points(lot_id, 0, 60),
+            "map_coords": lot.get("map_coords"),
+        })
+    return jsonify({
+        "map": {
+            "image": loc["image"],
+            "width": loc["map_width"],
+            "height": loc["map_height"],
+        },
+        "lots": lots,
+    })
+
+@app.route("/api/lots/<lot_id>")
+def api_lot(lot_id):
+    lot = LOTS.get(lot_id)
+    if not lot:
+        return make_response(jsonify({"error": "not_found"}), 404)
+    spots = []
+    for s in lot["spots"]:
+        # "x1,y1,x2,y2" -> [x1,y1,x2,y2]
+        c = [int(v) for v in s["coords"].split(",")] if isinstance(s["coords"], str) else s["coords"]
+        spots.append({
+            "id": s["id"],
+            "coords": c,
+            "spot_density": s.get("spot_density", 2)
+        })
+    return jsonify({
+        "id": lot_id,
+        "name": lot["name"],
+        "image": lot["image"],
+        "base_price_per_min": lot["base_price_per_min"],
+        "traffic_level": lot.get("traffic_level"),
+        "spots": spots,
+    })
+
+@app.route("/api/reservations")
+def api_my_reservations():
+    username = session.get("username")
+    if not username:
+        return make_response(jsonify({"error": "unauthorized"}), 401)
+    out = []
+    for lot_id, revs in reservations.items():
+        for r in revs:
+            if r["user"] == username:
+                out.append({**r, "lot_id": lot_id})
+    return jsonify({"reservations": out, "points": _user_points(username)})
+
+@app.route("/api/reserve", methods=["POST"])
+def api_reserve():
+    username = session.get("username")
+    if not username:
+        return make_response(jsonify({"error": "unauthorized"}), 401)
+    data = request.get_json(silent=True) or {}
+    lot_id = data.get("lot_id")
+    spot_id = int(data.get("spot_id", 0))
+    date_str = data.get("date")
+    hour = int(data.get("hour", 0))
+    minute = int(data.get("minute", 0))
+    duration_min = int(data.get("duration_min", 60))
+
+    try:
+        start_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(hour=hour, minute=minute, second=0, microsecond=0)
+    except Exception:
+        return make_response(jsonify({"error": "bad_request"}), 400)
+
+    start_ts = int(start_dt.timestamp())
+    end_ts = int((start_dt + timedelta(minutes=duration_min)).timestamp())
+
+    # 겹침 검사(원래 로직 재사용)
+    ov = check_overlapping(username, lot_id, spot_id, start_ts, end_ts)
+    if ov is True:
+        return make_response(jsonify({"error": "user_overlap"}), 409)
+    if ov == "spot_taken":
+        return make_response(jsonify({"error": "spot_unavailable"}), 409)
+
+    price = duration_min * LOTS[lot_id]["base_price_per_min"]
+    points_earned = calculate_eco_points(lot_id, spot_id, duration_min)
+
+    res_id = f"{lot_id}-{spot_id}-{start_ts}"
+    reservations.setdefault(lot_id, []).append({
+        "id": res_id, "user": username, "spot": spot_id,
+        "start": start_ts, "end": end_ts,
+        "price": price, "points_earned": points_earned
+    })
+
+    return jsonify({
+        "ok": True,
+        "reservation": {
+            "id": res_id, "spot": spot_id, "start": start_ts, "end": end_ts,
+            "price": price, "points_earned": points_earned
+        }
+    })
+
+@app.route("/api/payment/confirm", methods=["POST"])
+def api_payment_confirm():
+    username = session.get("username")
+    if not username:
+        return make_response(jsonify({"error": "unauthorized"}), 401)
+    data = request.get_json(silent=True) or {}
+    lot_id = data.get("lot_id")
+    reservation_id = data.get("reservation_id")
+    points_to_use = int(data.get("points_to_use", 0))
+
+    # 예약 찾기
+    target = None
+    for r in reservations.get(lot_id, []):
+        if r["id"] == reservation_id or (not reservation_id and r["user"] == username):
+            target = r
+            break
+    if not target:
+        return make_response(jsonify({"error": "reservation_not_found"}), 404)
+
+    # 포인트 차감 + 적립
+    users.setdefault(username, {"points": 0, "password": "1234"})
+    use = min(points_to_use, users[username]["points"])
+    users[username]["points"] -= use
+    users[username]["points"] += target.get("points_earned", 0)
+
+    return jsonify({
+        "ok": True,
+        "reservation": target,
+        "current_points": users[username]["points"]
+    })
+# ---------------------------------------------------------------------
+
